@@ -97,15 +97,17 @@ function colorPicker(scheme, palette, words) {
   return () => BRAND_NAVY;
 }
 
-// Совпадает с константой `SIZE_MULTIPLIER` в src/lib/cloud.ts. При
-// расхождении сайт и письмо нарисуют разные пропорции шрифтов.
+// Совпадает с константами `SIZE_MULTIPLIER` и `SIZE_FLOOR` в src/lib/cloud.ts.
+// При расхождении сайт и письмо нарисуют разные пропорции шрифтов.
 const SIZE_MULTIPLIER = 5.5;
+const SIZE_FLOOR = 0.4;
 
 function weightFactor(words, baseSize) {
   const max = Math.max(1, ...words.map((w) => w[1]));
-  const denom = Math.log2(max + 1);
-  return (count) =>
-    baseSize * (1 + (Math.log2(count + 1) / denom) * (SIZE_MULTIPLIER - 1));
+  return (count) => {
+    const c = Math.max(0, count);
+    return baseSize * (SIZE_FLOOR + Math.sqrt(c / max) * (SIZE_MULTIPLIER - SIZE_FLOOR));
+  };
 }
 
 // Rank-based интенсивность (см. src/lib/cloud.ts за обоснование):

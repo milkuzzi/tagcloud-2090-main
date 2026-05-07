@@ -140,18 +140,21 @@ export function colorPicker(
 }
 
 /**
- * Шкалирование размера шрифта по count. Логарифмическое — плотные «хвосты»
- * не «съедают» центр (если max=1000, а большинство слов с count<10).
+ * Шкалирование размера шрифта по count. sqrt(count/max) — линейнее
+ * log2: нижние ранги визуально меньше (длинный хвост из count=1–2
+ * не «выходит» на верхние ½ размера как при log2). Одновременно
+ * SIZE_FLOOR опускает минимальный размер ниже baseSize — самые лёгкие
+ * слова выглядят как подпись, а не как «равный сосед» среднему рангу.
  *
- * Возвращает baseSize..baseSize×SIZE_MULTIPLIER: даёт явное визуальное
- * превосходство самого популярного слова без того, чтобы оно вылезало
- * за холст. SIZE_MULTIPLIER подобран опытным путём на 1200×800 layout.
+ * Возвращает baseSize×SIZE_FLOOR..baseSize×SIZE_MULTIPLIER. SIZE_MULTIPLIER
+ * подобран опытным путём на 1200×800 layout.
  *
- * Ключевая константа также продублирована в `workers/render-worker.mjs`
+ * Ключевые константы также продублированы в `workers/render-worker.mjs`
  * — должны совпадать по смыслу, иначе сайт и письмо разойдутся по
  * относительным пропорциям шрифтов.
  */
 export const SIZE_MULTIPLIER = 5.5;
+export const SIZE_FLOOR = 0.4;
 
 export function weightFactor(words: CloudWord[], baseSize: number) {
   // Math.max(1, ...words.map(w => w[1])) выглядит лаконично, но делает две
@@ -162,8 +165,10 @@ export function weightFactor(words: CloudWord[], baseSize: number) {
   for (let i = 0; i < words.length; i++) {
     if (words[i][1] > max) max = words[i][1];
   }
-  const denom = Math.log2(max + 1);
-  return (count: number) => baseSize * (1 + (Math.log2(count + 1) / denom) * (SIZE_MULTIPLIER - 1));
+  return (count: number) => {
+    const c = Math.max(0, count);
+    return baseSize * (SIZE_FLOOR + Math.sqrt(c / max) * (SIZE_MULTIPLIER - SIZE_FLOOR));
+  };
 }
 
 /**

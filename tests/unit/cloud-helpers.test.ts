@@ -93,7 +93,7 @@ describe('interpolateStops', () => {
 });
 
 describe('weightFactor', () => {
-  it('возвращает baseSize для слова с count=0', () => {
+  it('возвращает baseSize×SIZE_FLOOR для слова с count=0', () => {
     const wf = weightFactor(
       [
         ['a', 0],
@@ -101,8 +101,8 @@ describe('weightFactor', () => {
       ],
       28
     );
-    // Math.log2(0+1) = 0, baseSize * (1 + 0) = baseSize
-    expect(wf(0)).toBe(28);
+    // sqrt(0/1) = 0, baseSize × SIZE_FLOOR = 28 × 0.4 = 11.2
+    expect(wf(0)).toBeCloseTo(28 * 0.4, 6);
   });
 
   it('самое частое слово получает максимум (×SIZE_MULTIPLIER)', () => {
@@ -113,13 +113,27 @@ describe('weightFactor', () => {
       ],
       28
     );
-    // Math.log2(10+1)/Math.log2(11) = 1, baseSize × SIZE_MULTIPLIER.
+    // sqrt(10/10) = 1, baseSize × SIZE_MULTIPLIER.
     expect(wf(10)).toBeCloseTo(28 * 5.5, 6);
   });
 
   it('пустой массив не делит на ноль (Math.max ставит max=1)', () => {
     const wf = weightFactor([], 18);
-    // Math.log2(1+1) = 1, denom=1; для count=1 → baseSize × SIZE_MULTIPLIER.
+    // sqrt(1/1) = 1, для count=1 → baseSize × SIZE_MULTIPLIER.
     expect(wf(1)).toBeCloseTo(18 * 5.5, 6);
+  });
+
+  it('последний ранг (count=1 при max=100) заметно меньше baseSize', () => {
+    const wf = weightFactor(
+      [
+        ['top', 100],
+        ['tail', 1]
+      ],
+      24
+    );
+    // sqrt(1/100) = 0.1, baseSize × (0.4 + 0.1×5.1) = 24 × 0.91 = 21.84
+    // Ключевое: «хвост» сверх-популярного топа < baseSize.
+    expect(wf(1)).toBeLessThan(24);
+    expect(wf(1)).toBeCloseTo(24 * (0.4 + 0.1 * 5.1), 6);
   });
 });
