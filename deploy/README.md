@@ -15,6 +15,7 @@
 | `backup.env.example` | Конфиг бэкапа (DATABASE_URL + restic-репозиторий + пароль). |
 | `tagcloud@.service` | Шаблон systemd для multi-instance (горизонтальное масштабирование под 1000+ concurrent). |
 | `mail-server.md` | Гайд по настройке Gmail SMTP (App Password + DNS). |
+| `static-ip.md` | Пошаговая инструкция под конкретный self-host: статический IP `193.233.246.98` + домен `2090.dedyn.io` (deSEC). |
 | `dynamic-ip.md` | Гайд по деплою на сервер с динамическим IP (DDNS / Cloudflare Tunnel / TLS DNS-01). |
 
 ## Первый деплой (типовой self-host)
@@ -165,6 +166,15 @@ systemctl restart tagcloud
 Можно временно деплоить по IP без TLS — раскомментируйте блок `:80` в
 `Caddyfile.example` и удалите блок `yourdomain.tld {…}`. После регистрации
 домена верните как было и перезагрузите Caddy.
+
+## Готовый сценарий: `2090.dedyn.io` на статическом IP
+
+Для конкретной целевой машины — VPS со статическим IP
+`193.233.246.98` и доменом `2090.dedyn.io` (deSEC) — собран отдельный
+гайд `deploy/static-ip.md` с уже подставленными значениями: A-запись
+в deSEC, sed-замена `yourdomain.tld → 2090.dedyn.io` в `Caddyfile.example`,
+ufw-правила, проверки DNS/TLS. Для new-deploy на этот сервер удобнее
+идти по нему, не правя шаблоны вручную.
 
 ## Динамический IP
 
