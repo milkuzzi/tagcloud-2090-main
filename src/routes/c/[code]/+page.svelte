@@ -7,6 +7,7 @@
 
   let { data }: PageProps = $props();
   const survey = $derived(data.survey);
+  const creatorToken = $derived(data.creatorToken);
 
   let canvas = $state<HTMLCanvasElement | null>(null);
   // Initial-only чтение через untrack: SSR-снапшот фиксирован, дальше
@@ -27,20 +28,17 @@
   const totalVotes = $derived(activeWords.reduce((s, [, c]) => s + c, 0));
 
   /**
-   * Подключение к публичному read-only WS `/ws/c/<code>`. В отличие от
-   * креаторского `/ws/<code>` не требует токена (опрос с известным
-   * кодом — публичен по дизайну: любой респондент уже знает код).
-   * Сервер бродкастит cloud:<questionId> snapshots каждые 2.5с при
-   * наличии изменений, что покрывает любой кейс «облако обновляется».
-   * Поллинга больше нет — нагрузка на Postgres от просмотра страницы
-   * /c/[code] стремится к нулю (только при поступлении нового голоса
-   * Redis-агрегат пересчитывается, и WS уже подписан на pub/sub).
+   * Подключение к креатор-WS `/ws/<code>?t=<token>`. Сервер пушит
+   * cloud:<questionId> snapshots каждые 2.5с при наличии изменений
+   * (без поллинга и без нагрузки на Postgres).
    */
   function connect(): void {
     if (typeof window === 'undefined') return;
     if (stopReconnect || stopped) return;
     const proto = window.location.protocol === 'https:' ? 'wss' : 'ws';
-    ws = new WebSocket(`${proto}://${window.location.host}/ws/c/${survey.code}`);
+    ws = new WebSocket(
+      `${proto}://${window.location.host}/ws/${survey.code}?t=${encodeURIComponent(creatorToken)}`
+    );
     ws.onmessage = (ev) => {
       try {
         const msg = JSON.parse(ev.data) as ServerMsg;
@@ -74,8 +72,26 @@
     if (ws && ws.readyState === ws.OPEN) ws.close(1000, 'page unload');
   });
 
+  // Подгоняем canvas под размер окна, чтобы облако занимало всё доступное
+  // пространство в новой вкладке. Размер canvas — это logical render-size
+  // для d3-cloud; пересчёт идёт через resize-наблюдатель + перерисовку.
+  let viewportSize = $state({ width: 1600, height: 900 });
+  onMount(() => {
+    function updateSize() {
+      viewportSize = {
+        width: Math.max(640, window.innerWidth),
+        height: Math.max(360, window.innerHeight)
+      };
+    }
+    updateSize();
+    window.addEventListener('resize', updateSize);
+    return () => window.removeEventListener('resize', updateSize);
+  });
+
   $effect(() => {
     if (!canvas) return;
+    canvas.width = viewportSize.width;
+    canvas.height = viewportSize.height;
     const list = activeWords;
     if (list.length === 0) {
       const ctx = canvas.getContext('2d');
@@ -91,7 +107,7 @@
       survey.colorScheme,
       survey.customPalette,
       {
-        baseSize: 20,
+        baseSize: 24,
         maxWords: survey.maxWords,
         allowVertical: survey.allowVertical
       },
@@ -104,63 +120,93 @@
 </script>
 
 <svelte:head>
-  <title>Облако · {survey.title ?? survey.code}</title>
+  <title>Облако · {survey.title ?? 'Опрос'}</title>
 </svelte:head>
 
-<section class="head">
-  <h1>{survey.title ?? `Опрос ${survey.code}`}</h1>
-  <p class="muted">
-    {#if survey.status === 'active' && !stopped}
-      Облако обновляется автоматически. Голосов в этом вопросе: {totalVotes}.
-    {:else}
-      Опрос завершён. Голосов в этом вопросе: {totalVotes}.
-    {/if}
-  </p>
-</section>
+<!--
+  Чистый просмотр облака: страница не содержит шапки, футера или
+  навигации — только canvas с облаком (правка №2). Глобальная шапка
+  отключена в src/routes/+layout.svelte по route.id = '/c/[code]'.
+  Многовопросный опрос переключается через минималистичный оверлей
+  снизу страницы.
+-->
+<div class="cloud-screen">
+  <canvas
+    bind:this={canvas}
+    width={viewportSize.width}
+    height={viewportSize.height}
+    aria-label="Облако ответов"
+  ></canvas>
 
-{#if survey.questions.length > 1}
-  <div class="tabs">
-    {#each survey.questions as q, i (q.id)}
-      <button
-        type="button"
-        class="tab"
-        class:active={i === activeIdx}
-        onclick={() => (activeIdx = i)}
-      >
-        {i + 1}. {q.text.length > 30 ? q.text.slice(0, 30) + '…' : q.text}
-      </button>
-    {/each}
-  </div>
-{/if}
-
-<div class="active-question">{activeQuestion?.text}</div>
-
-<div class="canvas-wrap">
   {#if activeWords.length === 0}
-    <div class="empty">Пока нет ответов.</div>
+    <div class="empty">
+      {stopped ? 'Голосов в этом опросе не было.' : 'Пока нет ответов.'}
+    </div>
   {/if}
-  <canvas bind:this={canvas} width="1200" height="700"></canvas>
+
+  {#if survey.questions.length > 1}
+    <nav class="tabs" aria-label="Переключение между вопросами">
+      {#each survey.questions as q, i (q.id)}
+        <button
+          type="button"
+          class="tab"
+          class:active={i === activeIdx}
+          onclick={() => (activeIdx = i)}
+          title={q.text}
+        >
+          {i + 1}
+        </button>
+      {/each}
+    </nav>
+  {/if}
+
+  <div class="vote-count" aria-live="polite">
+    {totalVotes}
+  </div>
 </div>
 
 <style>
-  .head {
-    margin-bottom: var(--space-4);
+  .cloud-screen {
+    position: relative;
+    width: 100vw;
+    height: 100vh;
+    background: #ffffff;
+    overflow: hidden;
   }
-  .muted {
+  canvas {
+    display: block;
+    width: 100vw;
+    height: 100vh;
+  }
+  .empty {
+    position: absolute;
+    inset: 0;
+    display: flex;
+    align-items: center;
+    justify-content: center;
     color: var(--c-muted);
+    font-size: 1.125rem;
+    pointer-events: none;
   }
   .tabs {
+    position: absolute;
+    bottom: 16px;
+    left: 50%;
+    transform: translateX(-50%);
     display: flex;
-    gap: var(--space-2);
-    flex-wrap: wrap;
-    margin: var(--space-3) 0;
+    gap: 6px;
+    padding: 6px 10px;
+    background: rgba(255, 255, 255, 0.92);
+    border: 1px solid var(--c-border);
+    border-radius: var(--radius-md);
+    box-shadow: var(--shadow-sm);
   }
   .tab {
     border: 1px solid var(--c-border);
     background: var(--c-bg);
     color: var(--c-text);
-    border-radius: var(--radius-md);
-    padding: 6px 10px;
+    border-radius: var(--radius);
+    padding: 4px 10px;
     font-size: 0.875rem;
     cursor: pointer;
   }
@@ -169,29 +215,16 @@
     color: white;
     border-color: var(--c-navy);
   }
-  .active-question {
-    font-weight: 500;
-    margin: var(--space-2) 0 var(--space-3);
-  }
-  .canvas-wrap {
-    position: relative;
-    width: 100%;
-    aspect-ratio: 12 / 7;
-    border: 1px solid var(--c-border);
-    border-radius: var(--radius-md);
-    overflow: hidden;
-    background: white;
-  }
-  .canvas-wrap canvas {
-    width: 100%;
-    height: 100%;
-    display: block;
-  }
-  .empty {
+  .vote-count {
     position: absolute;
-    inset: 0;
-    display: grid;
-    place-items: center;
+    top: 16px;
+    right: 16px;
+    background: rgba(255, 255, 255, 0.92);
+    border: 1px solid var(--c-border);
+    border-radius: var(--radius);
+    padding: 4px 10px;
     color: var(--c-muted);
+    font-size: 0.875rem;
+    font-variant-numeric: tabular-nums;
   }
 </style>

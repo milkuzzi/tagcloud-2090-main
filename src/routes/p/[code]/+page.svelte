@@ -146,7 +146,7 @@
 </script>
 
 <svelte:head>
-  <title>Презентация · {survey.title ?? survey.code}</title>
+  <title>Презентация · {survey.title ?? 'Опрос'}</title>
 </svelte:head>
 
 <svelte:window onkeydown={onKeydown} />
@@ -214,18 +214,6 @@
   </section>
 
   <aside class="share-side" aria-label="Реквизиты опроса">
-    <div class="share-block">
-      <h2 class="share-h">Код опроса</h2>
-      <div
-        class="big-code"
-        role="button"
-        tabindex="0"
-        use:copyOnClick={{ kind: 'text', text: survey.code }}
-      >
-        {survey.code}
-      </div>
-    </div>
-
     <div class="share-block">
       <h2 class="share-h">Ссылка</h2>
       <div
@@ -406,30 +394,17 @@
     font-weight: 600;
     margin: 0;
   }
-  .big-code,
   .link-text {
     user-select: none;
     transition: background-color 120ms;
     border-radius: var(--radius);
   }
-  .big-code:hover,
   .link-text:hover {
     background: rgba(14, 42, 92, 0.06);
   }
-  .big-code:focus-visible,
   .link-text:focus-visible {
     outline: 2px solid var(--c-navy);
     outline-offset: 2px;
-  }
-  .big-code {
-    font-size: 2.25rem;
-    font-weight: 700;
-    color: var(--c-navy);
-    letter-spacing: 0.12em;
-    font-family: var(--font-mono);
-    line-height: 1;
-    word-break: break-all;
-    padding: var(--space-2);
   }
   .link-text {
     font-family: var(--font-mono);

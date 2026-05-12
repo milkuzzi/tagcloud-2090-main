@@ -194,14 +194,11 @@
       <li class="card">
         <div class="card-head">
           <a class="title" href={`/s/${s.code}`}>
-            {s.title ?? `Опрос ${s.code}`}
+            {s.title ?? 'Опрос'}
           </a>
           <span class={status.cls} title={status.title ?? ''}>{status.text}</span>
         </div>
         <div class="meta">
-          {#if s.status === 'active'}
-            <code class="code">{s.code}</code>
-          {/if}
           <span>
             {s.questionsCount}
             {plural(s.questionsCount, ['вопрос', 'вопроса', 'вопросов'])}

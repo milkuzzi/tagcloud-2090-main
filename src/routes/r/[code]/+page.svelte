@@ -188,14 +188,13 @@
   }
 </script>
 
-<svelte:head><title>{survey.title ?? 'Опрос ' + survey.code}</title></svelte:head>
+<svelte:head><title>{survey.title ?? 'Опрос'}</title></svelte:head>
 
 {#if screen === 'closed'}
   <div class="state state-closed">
     <div class="state-icon" aria-hidden="true">⏳</div>
     <h1>Опрос завершён</h1>
     <p class="muted">Голосование больше не принимается.</p>
-    <a class="btn btn-primary" href={`/c/${survey.code}`}>Посмотреть облако</a>
   </div>
 {:else if screen === 'sent' || screen === 'already'}
   <div class="state {screen === 'already' ? 'state-already' : 'state-sent'}">
@@ -207,9 +206,6 @@
       <h1>Спасибо!</h1>
       <p class="muted">Ваш ответ записан.</p>
     {/if}
-    <!-- Правка №2: кнопка перехода к просмотру облака. На /c/[code]
-         реализовано переключение между облаками, если вопросов несколько. -->
-    <a class="btn btn-primary" href={`/c/${survey.code}`}>Посмотреть облако</a>
   </div>
 {:else}
   <h1>{survey.title ?? 'Опрос'}</h1>
@@ -334,9 +330,6 @@
   }
   .state-closed .state-icon {
     color: var(--c-muted);
-  }
-  .state .btn {
-    margin-top: var(--space-3);
   }
 
   form {

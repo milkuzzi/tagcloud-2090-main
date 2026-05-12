@@ -11,6 +11,10 @@
   // preload, а preload добавлял CSS в <head> навсегда (до следующего
   // full reload), и все страницы ломались по всей ширине.
   const isFullbleed = $derived(page.route.id === '/p/[code]');
+  // Чистый просмотр облака (/c/[code]) открывается в отдельной вкладке и
+  // не должен показывать шапку/футер/навигацию — кроме самого облака на
+  // странице ничего быть не должно (правка №2).
+  const isChromeless = $derived(page.route.id === '/c/[code]');
 
   async function logout() {
     await fetch('/api/auth/logout', { method: 'POST' });
@@ -19,33 +23,37 @@
   }
 </script>
 
-<a class="skip-link" href="#main">Перейти к содержимому</a>
+{#if !isChromeless}
+  <a class="skip-link" href="#main">Перейти к содержимому</a>
 
-<header class="topbar">
-  <a class="brand" href={data.user ? '/my' : '/'}>
-    <img class="brand-logo" src="/logo2090.png" alt="Школа №2090" />
-    <span class="brand-text">Облако тегов</span>
-  </a>
+  <header class="topbar">
+    <a class="brand" href={data.user ? '/my' : '/'}>
+      <img class="brand-logo" src="/logo2090.png" alt="Школа №2090" />
+      <span class="brand-text">Облако тегов</span>
+    </a>
 
-  <nav class="nav" aria-label="Основная навигация">
-    {#if data.user}
-      <a class="nav-link" href="/my" aria-current={page.route.id === '/my' ? 'page' : undefined}>
-        Мои опросы
-      </a>
-      <button type="button" class="btn btn-ghost btn-sm" onclick={logout}>Выход</button>
-    {:else}
-      <a class="nav-link" href="/login">Войти</a>
-    {/if}
-  </nav>
-</header>
+    <nav class="nav" aria-label="Основная навигация">
+      {#if data.user}
+        <a class="nav-link" href="/my" aria-current={page.route.id === '/my' ? 'page' : undefined}>
+          Мои опросы
+        </a>
+        <button type="button" class="btn btn-ghost btn-sm" onclick={logout}>Выход</button>
+      {:else}
+        <a class="nav-link" href="/login">Войти</a>
+      {/if}
+    </nav>
+  </header>
+{/if}
 
-<main id="main" class="container" class:fullbleed={isFullbleed}>
+<main id="main" class="container" class:fullbleed={isFullbleed} class:chromeless={isChromeless}>
   {@render children()}
 </main>
 
-<footer class="footer">
-  <span>Школа №2090 · образовательный проект</span>
-</footer>
+{#if !isChromeless}
+  <footer class="footer">
+    <span>Школа №2090 · образовательный проект</span>
+  </footer>
+{/if}
 
 <style>
   .topbar {
@@ -119,6 +127,15 @@
   .container.fullbleed {
     max-width: none;
     padding: 0;
+  }
+  /* Chromeless: страница облака в отдельной вкладке — ни шапки, ни
+     футера, ни отступов. Заполняет всю высоту окна, чтобы canvas мог
+     раскрыться на весь экран. */
+  .container.chromeless {
+    max-width: none;
+    padding: 0;
+    margin: 0;
+    min-height: 100vh;
   }
   .footer {
     border-top: 1px solid var(--c-border);
