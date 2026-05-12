@@ -466,11 +466,38 @@ if [[ "$SKIP_TUNNEL_SETUP" == "1" ]]; then
 elif [[ -n "$CF_TUNNEL_TOKEN" ]]; then
   hdr "Установка cloudflared как сервиса (по token'у)"
 
+  # Старые артефакты от ручной настройки (cloudflared tunnel login + config.yml)
+  # ломают token-mode: cloudflared всё равно подхватывает /etc/cloudflared/config.yml
+  # и берёт из него `protocol:` и `credentials-file:`, в т.ч. от уже удалённого
+  # туннеля. Уносим их в .bak, чтобы token-mode работал из коробки.
+  mkdir -p /etc/cloudflared
+  for stale in /etc/cloudflared/config.yml /etc/cloudflared/config.yaml /etc/cloudflared/*.json; do
+    if [[ -f "$stale" ]]; then
+      mv -f "$stale" "${stale}.preinstall.bak"
+      info "Перенесён старый файл: $stale → ${stale}.preinstall.bak"
+    fi
+  done
+
   # `cloudflared service install <TOKEN>` ставит systemd-юнит cloudflared
   # и сохраняет креды в /etc/cloudflared/. Этот режим — для туннеля,
   # созданного в Cloudflare Zero Trust UI (Networks → Tunnels → Create).
   cloudflared service install "$CF_TUNNEL_TOKEN" || warn "cloudflared service install вернул ненулевой код — возможно, уже установлен"
 
+  # cloudflared 2025+ генерирует ExecStart с принудительным
+  # `--protocol http2 --edge-ip-version 4 --retries 10`. На сетях, где
+  # CF edge регулярно ротирует http2-соединения, это даёт «дёрганье»:
+  # 4 connection-а постоянно пере-регистрируются, и часть запросов ловит
+  # окна disconnect → 502/530. Дропом этих флагов возвращаем поведение
+  # по умолчанию (`--protocol auto`): cloudflared пробует QUIC, при
+  # недоступности UDP 7844 сам падает на http2.
+  mkdir -p /etc/systemd/system/cloudflared.service.d
+  cat > /etc/systemd/system/cloudflared.service.d/override.conf <<EOF
+[Service]
+ExecStart=
+ExecStart=/usr/bin/cloudflared --no-autoupdate tunnel run --token ${CF_TUNNEL_TOKEN}
+EOF
+
+  systemctl daemon-reload
   systemctl enable --now cloudflared
   systemctl restart cloudflared
   ok "cloudflared запущен"
