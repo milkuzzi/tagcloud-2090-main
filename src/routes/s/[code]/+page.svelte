@@ -231,7 +231,7 @@
   const status = $derived(statusBadge(survey.status));
 </script>
 
-<svelte:head><title>Дашборд · {survey.title ?? survey.code}</title></svelte:head>
+<svelte:head><title>Дашборд · {survey.title ?? 'Опрос'}</title></svelte:head>
 
 <header class="title-row">
   <div class="title-info">
@@ -313,17 +313,6 @@
   <section class="card share">
     <div class="share-info">
       <div class="share-block">
-        <h2 class="share-h">Код опроса</h2>
-        <span
-          class="big-code"
-          role="button"
-          tabindex="0"
-          use:copyOnClick={{ kind: 'text', text: survey.code }}
-        >
-          {survey.code}
-        </span>
-      </div>
-      <div class="share-block">
         <h2 class="share-h">Ссылка на опрос</h2>
         <span
           class="link-text"
@@ -354,6 +343,14 @@
   <div class="cloud-head">
     <h2>Облако</h2>
     <div class="cloud-actions">
+      <!--
+        Правка №2: ссылка на чистый просмотр облака в новой вкладке.
+        /c/[code] — chromeless-страница без шапки/футера/навигации:
+        на экране только canvas с облаком. Доступна только креатору.
+      -->
+      <a class="btn btn-primary btn-sm" href={`/c/${survey.code}`} target="_blank" rel="noopener">
+        Открыть в новой вкладке
+      </a>
       <a class="btn btn-ghost btn-sm" href={csvUrl()}>Скачать CSV</a>
       <button
         class="btn btn-ghost btn-sm"
@@ -382,7 +379,18 @@
 
   <div class="active-question">{activeQuestion?.text}</div>
 
-  <div class="canvas-wrap">
+  <!--
+    Клик по canvas тоже открывает чистый просмотр в новой вкладке
+    (правка №2: «открываться новая вкладка при клике на облако
+    тегов в дашборде»). Для клавиатуры — Enter/Space по фокусу.
+  -->
+  <a
+    class="canvas-wrap canvas-link"
+    href={`/c/${survey.code}`}
+    target="_blank"
+    rel="noopener"
+    aria-label="Открыть облако в новой вкладке"
+  >
     {#if activeWords.length === 0}
       <div class="empty">
         {isActive
@@ -391,7 +399,7 @@
       </div>
     {/if}
     <canvas bind:this={canvas} width="1200" height="700"></canvas>
-  </div>
+  </a>
 
   <!-- Правка №4: аналитика облака. Считаем по активному вопросу:
        объём, уникальность, топ-слово и индекс разнообразия Симпсона. -->
@@ -529,11 +537,10 @@
     font-weight: 600;
     margin: 0;
   }
-  /* .big-code/.link-text/.qr — кликабельны через action copyOnClick;
+  /* .link-text/.qr — кликабельны через action copyOnClick;
      visual hint и клик-цель совпадают, поэтому box-style + cursor:pointer
      ставим прямо на сам элемент. Кнопок «Копировать» больше нет —
      hover-tooltip действует как индикатор копируемости. */
-  .big-code,
   .link-text {
     user-select: none;
     transition: background-color 120ms;
@@ -541,24 +548,12 @@
     align-self: flex-start;
     max-width: 100%;
   }
-  .big-code:hover,
   .link-text:hover {
     background: rgba(14, 42, 92, 0.06);
   }
-  .big-code:focus-visible,
   .link-text:focus-visible {
     outline: 2px solid var(--c-navy);
     outline-offset: 2px;
-  }
-  .big-code {
-    font-size: 2.25rem;
-    font-weight: 700;
-    color: var(--c-navy);
-    letter-spacing: 0.15em;
-    font-family: var(--font-mono);
-    line-height: 1;
-    padding: var(--space-2);
-    word-break: break-all;
   }
   .link-text {
     display: inline-block;
@@ -647,6 +642,23 @@
     border: 1px solid var(--c-border);
     border-radius: var(--radius);
     overflow: hidden;
+  }
+  /* Кликабельная обложка canvas — открывает чистый просмотр в новой
+     вкладке. Снимаем дефолтный подчёркнутый стиль и окраску. */
+  .canvas-link {
+    display: block;
+    text-decoration: none;
+    color: inherit;
+    cursor: pointer;
+    transition: box-shadow 120ms;
+  }
+  .canvas-link:hover {
+    text-decoration: none;
+    box-shadow: 0 0 0 2px rgba(14, 42, 92, 0.18);
+  }
+  .canvas-link:focus-visible {
+    outline: 2px solid var(--c-navy);
+    outline-offset: 2px;
   }
   canvas {
     width: 100%;

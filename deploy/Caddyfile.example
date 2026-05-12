@@ -1,17 +1,26 @@
 # Caddyfile для reverse-proxy перед Node-инстансом tagcloud.
 #
+# Раскладка двух виртхостов:
+#   * `2090.fun`        — статический landing-сайт со списком проектов
+#                         Школы №2090 (раздаётся из /opt/tagcloud/landing).
+#   * `cloud.2090.fun`  — облако тегов (SvelteKit / Node, порт 3000).
+#
 # Использование:
 #   1. Скопировать в /etc/caddy/Caddyfile (или включить через `import`).
-#   2. Заменить yourdomain.tld на реальный домен.
-#   3. Если домена ещё нет — оставить блок `:80` ниже для тестов по IP.
+#   2. Заменить admin@2090.fun на реальный почтовый ящик для ACME.
+#   3. Если боевой сценарий — Cloudflare Tunnel (variant B, см.
+#      deploy/dynamic-ip.md), TLS терминируется на edge Cloudflare,
+#      и Caddy слушает по HTTP без сертификатов (см. блок ниже).
 #   4. systemctl reload caddy.
 #
 # Caddy автоматически выпустит и обновит TLS-сертификат через Let's Encrypt
-# (HTTP-01) при первом обращении к домену с публичного IP.
+# (HTTP-01) при первом обращении к домену с публичного IP. При Cloudflare
+# Tunnel сертификаты не нужны — раскомментируйте `http://` блоки внизу
+# и закомментируйте боевые TLS-блоки.
 
 {
-	# Глобальные настройки. ACME email обязателен для production.
-	email admin@yourdomain.tld
+	# Глобальные настройки. ACME email обязателен для production TLS.
+	email admin@2090.fun
 
 	# Логи в журнал systemd (journalctl -u caddy).
 	log {
@@ -21,13 +30,38 @@
 	}
 }
 
-yourdomain.tld {
-	# Каталог для статических ассетов SvelteKit (если выносить из Node).
-	# Пока всё отдаёт сам Node — раскомментируйте, когда захочется снять с него
-	# нагрузку на отдачу /_app/* и фавиконки.
-	# root * /opt/tagcloud/build/client
-	# file_server
+# ─────────────────────────────────────────────────────────────────────────
+# Landing 2090.fun: статический сайт с проектами Школы №2090
+# (один из проектов — облако тегов на cloud.2090.fun).
+# ─────────────────────────────────────────────────────────────────────────
 
+2090.fun, www.2090.fun {
+	# Каталог с index.html / styles.css / logo2090.png.
+	root * /opt/tagcloud/landing
+	file_server
+	encode zstd gzip
+
+	# Те же security-заголовки, что у основного приложения.
+	header {
+		Strict-Transport-Security "max-age=31536000; includeSubDomains"
+		X-Content-Type-Options "nosniff"
+		X-Frame-Options "DENY"
+		Referrer-Policy "strict-origin-when-cross-origin"
+		Permissions-Policy "camera=(), microphone=(), geolocation=(), payment=()"
+		-Server
+	}
+
+	# Доп. защита: блокируем доступ к скрытым файлам/директориям, чтобы
+	# случайно положенный .env / .git не утёк.
+	@hidden path /.env /.git/* /.DS_Store
+	respond @hidden 404
+}
+
+# ─────────────────────────────────────────────────────────────────────────
+# Облако тегов: cloud.2090.fun → Node (127.0.0.1:3000)
+# ─────────────────────────────────────────────────────────────────────────
+
+cloud.2090.fun {
 	# Главное: проксируем всё на Node. Caddy сам апгрейдит ws:// → wss://.
 	#
 	# Для multi-instance (см. deploy/README.md "Профиль multi-instance"):
@@ -103,6 +137,31 @@ yourdomain.tld {
 	@hidden path /.env /.git/*
 	respond @hidden 404
 }
+
+# ─────────────────────────────────────────────────────────────────────────
+# Cloudflare Tunnel (variant B, dynamic IP):
+# TLS терминируется на edge Cloudflare, Caddy слушает только по HTTP
+# на 127.0.0.1:8080 (cloudflared проксирует туда). Раскомментируйте
+# и удалите TLS-блоки выше, если используете этот сценарий.
+# ─────────────────────────────────────────────────────────────────────────
+#
+# http://2090.fun:8080, http://www.2090.fun:8080 {
+# 	root * /opt/tagcloud/landing
+# 	file_server
+# 	encode zstd gzip
+# }
+#
+# http://cloud.2090.fun:8080 {
+# 	reverse_proxy 127.0.0.1:3000 {
+# 		header_up X-Real-IP {remote_host}
+# 		header_up X-Forwarded-For {remote_host}
+# 		header_up X-Forwarded-Proto {scheme}
+# 		transport http {
+# 			read_timeout 1h
+# 			write_timeout 1h
+# 		}
+# 	}
+# }
 
 # Опционально: HTTP-доступ по IP без TLS — только для разработки/первичной
 # проверки. На production удалите этот блок.
