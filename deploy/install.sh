@@ -48,6 +48,11 @@ PG_USER="${PG_USER:-tagcloud}"
 PG_DB="${PG_DB:-tagcloud}"
 PG_PASSWORD="${POSTGRES_PASSWORD:-}"  # пусто => сгенерируем
 
+# REDIS_URL нужен ещё до записи env-файла: SvelteKit при `vite build` грузит
+# модули $lib/server/db.ts и $lib/server/redis.ts на этапе SSR-analyse, и
+# они кидают исключение, если соответствующие переменные не выставлены.
+REDIS_URL="${REDIS_URL:-redis://localhost:6379}"
+
 # Cloudflare Tunnel: либо token (новый named tunnel from dashboard),
 # либо SKIP_TUNNEL_SETUP=1 — если пользователь настроит сам.
 CF_TUNNEL_TOKEN="${CF_TUNNEL_TOKEN:-}"
@@ -226,8 +231,16 @@ ok "Репозиторий готов в $APP_DIR"
 
 hdr "Установка npm-зависимостей и сборка"
 
+# DATABASE_URL и REDIS_URL должны быть в окружении уже на этапе `vite build`:
+# SvelteKit при postbuild-analyse импортирует серверные модули, и
+# `$lib/server/db.ts` / `$lib/server/redis.ts` кидают исключение, если
+# переменные не заданы (см. CI workflow — там делают то же самое со
+# стабовыми значениями). Реального подключения к БД/Redis на этой стадии
+# не открывается, но переменные обязаны существовать.
+DATABASE_URL="postgres://${PG_USER}:${PG_PASSWORD}@localhost:5432/${PG_DB}"
+
 sudo -u "$APP_USER" bash -lc "cd '$APP_DIR' && npm ci --no-audit --no-fund"
-sudo -u "$APP_USER" bash -lc "cd '$APP_DIR' && npm run build"
+sudo -u "$APP_USER" bash -lc "cd '$APP_DIR' && DATABASE_URL='${DATABASE_URL}' REDIS_URL='${REDIS_URL}' npm run build"
 ok "Приложение собрано"
 
 # ────────── env-файл ──────────
@@ -244,8 +257,6 @@ if [[ -z "$SESSION_SECRET" ]]; then
     SESSION_SECRET="$(openssl rand -hex 32)"
   fi
 fi
-
-DATABASE_URL="postgres://${PG_USER}:${PG_PASSWORD}@localhost:5432/${PG_DB}"
 
 umask 0027
 cat > "$ENV_FILE" <<EOF
