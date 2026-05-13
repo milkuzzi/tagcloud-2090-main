@@ -483,18 +483,18 @@ elif [[ -n "$CF_TUNNEL_TOKEN" ]]; then
   # созданного в Cloudflare Zero Trust UI (Networks → Tunnels → Create).
   cloudflared service install "$CF_TUNNEL_TOKEN" || warn "cloudflared service install вернул ненулевой код — возможно, уже установлен"
 
-  # cloudflared 2025+ генерирует ExecStart с принудительным
-  # `--protocol http2 --edge-ip-version 4 --retries 10`. На сетях, где
-  # CF edge регулярно ротирует http2-соединения, это даёт «дёрганье»:
-  # 4 connection-а постоянно пере-регистрируются, и часть запросов ловит
-  # окна disconnect → 502/530. Дропом этих флагов возвращаем поведение
-  # по умолчанию (`--protocol auto`): cloudflared пробует QUIC, при
-  # недоступности UDP 7844 сам падает на http2.
+  # На многих провайдерных/NAT-сетях UDP 7844 (cloudflared QUIC) и/или
+  # IPv6 к cloudflare edge не работают — cloudflared с `--protocol auto`
+  # будет постоянно дёргаться: 4 conn-а не могут установить QUIC, валятся
+  # по timeout, retry с http2, потом edge снова закрывает.  Перезаписываем
+  # ExecStart с принудительным http2 + edge-ip-version=4, чтобы конекшены
+  # вставали с первой попытки и держались.  Если ваш сервер видит UDP 7844
+  # наружу и IPv6 — можете удалить override и положиться на `--protocol auto`.
   mkdir -p /etc/systemd/system/cloudflared.service.d
   cat > /etc/systemd/system/cloudflared.service.d/override.conf <<EOF
 [Service]
 ExecStart=
-ExecStart=/usr/bin/cloudflared --no-autoupdate tunnel run --token ${CF_TUNNEL_TOKEN}
+ExecStart=/usr/bin/cloudflared --no-autoupdate --protocol http2 --edge-ip-version 4 --retries 10 tunnel run --token ${CF_TUNNEL_TOKEN}
 EOF
 
   systemctl daemon-reload
